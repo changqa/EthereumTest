@@ -9,7 +9,7 @@ from crypto import keccak256
 from secp256k1 import PrivateKey, PublicKey
 from ipaddress import ip_address
 from gevent.server import DatagramServer
-from packets import EndPoint, PingPacket, PongPacket
+from packets import EndPoint, PingPacket, PongPacket, FindNodePacket, NeighborsPacket
 
 # Structure:
 # Hash || Signature || packet_type || packet_data
@@ -22,9 +22,8 @@ from packets import EndPoint, PingPacket, PongPacket
 
 class PingServer(object):
     def __init__(self, my_endpoint, remote_endpoint, pingSleep, privKeyFile, kid):
-        self.endpoint = my_endpoint
-        print(str(self.endpoint))
-        self.remote_endpoint = remote_endpoint
+        self.myEndpoint = my_endpoint
+        self.theirEndpoint = remote_endpoint
         self.pingSleep = pingSleep
         self.kid = kid
 
@@ -37,7 +36,7 @@ class PingServer(object):
 
         ## init socket
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.bind((self.endpoint.address.exploded, self.endpoint.udpPort))
+        self.sock.bind((self.myEndpoint.address.exploded, self.myEndpoint.udpPort))
 
 
     def startPingLoop(self):
@@ -50,7 +49,7 @@ class PingServer(object):
     def _pingLoop(self):
         print("pingLoop")
         while True:
-            self.ping(self.remote_endpoint)
+            self.ping(self.theirEndpoint)
             time.sleep(self.pingSleep)
 
 
@@ -68,7 +67,7 @@ class PingServer(object):
     def _listenLoop(self):
         print("Start Listening...")
         while True:
-            data, addr = self.sock.recvfrom(1024)
+            data, addr = self.sock.recvfrom(2048)
             print("--------------- New Packet (ID: " + str(self.kid) + ") -------------")
             self.handlePacket(data, addr)
 
@@ -102,7 +101,7 @@ class PingServer(object):
             print("Signature invalid!")
             exit(0)
         else:
-            print(pub.serialize().hex())
+            print("Public Key: " + pub.serialize().hex())
 
         if bytes([ptype]) == PingPacket.packet_type:
             print("Got ping.")
@@ -110,29 +109,34 @@ class PingServer(object):
             print(str(recv_ping))
             # self.pong(msg_hash, recv_ping.To())
             # TODO: Find out the correct endpoint
-            self.pong(self.remote_endpoint, msg_hash)
+            self.pong(self.theirEndpoint, msg_hash)
         if bytes([ptype]) == PongPacket.packet_type:
             print("Got pong.")
             recv_pong = PongPacket.unpack(decdata)
             print(str(recv_pong))
-            self.ping(recv_pong.From())
+            # self.ping(self.theirEndpoint)
+        if bytes([ptype]) == FindNodePacket.packet_type:
+            print("Got FindNodePacket.")
+            recv_findnode = FindNodePacket.unpack(rlp.decode(pdata))
+            print(str(recv_findnode))
+        if bytes([ptype]) == NeighborsPacket.packet_type:
+            print("Got NeighborsPacket.")
 
 
-    def ping(self, endpoint):
-        ping = PingPacket(self.endpoint, endpoint, time.time() + 60)
+    def ping(self, theirEndpoint):
+        ping = PingPacket(self.myEndpoint, theirEndpoint, time.time() + 60)
         message = self.wrap_packet(ping)
-        print("sending ping.")
-        self.sock.sendto(message, (endpoint.address.exploded, endpoint.udpPort))
+        print("Sending ping to: " + str(theirEndpoint))
+        self.sock.sendto(message, (theirEndpoint.address.exploded, theirEndpoint.udpPort))
 
-    def pong(self, endpoint, echo):
-        pong = PongPacket(endpoint, echo, time.time() + 60)
+    def pong(self, theirEndpoint, echo):
+        pong = PongPacket(theirEndpoint, echo, time.time() + 60)
         message = self.wrap_packet(pong)
-        print("sending pong.")
-        self.sock.sendto(message, (endpoint.address.exploded, endpoint.udpPort))
+        print("Sending pong to: " + str(theirEndpoint))
+        self.sock.sendto(message, (theirEndpoint.address.exploded, theirEndpoint.udpPort))
 
-
-class EchoServer(DatagramServer):
-
-    def handle(self, data, address): # pylint:disable=method-hidden
-        print('%s: got %r' % (address[0], data))
-        self.socket.sendto(('Received %s bytes' % len(data)).encode('utf-8'), address)
+    def findnode(self, theirEndpoint, target):
+        findnode = FindNodePacket(target, time.time() + 60)
+        message = self.wrap_packet(findnode)
+        print("Sending FindNodePacket to: " + str(theirEndpoint))
+        self.sock.sendto(message, (theirEndpoint.address.exploded, theirEndpoint.udpPort))

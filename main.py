@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import time
-from discovery import EndPoint, PingPacket, PingServer, EchoServer
+from discovery import EndPoint, PingPacket, PingServer
 import socket
 from secp256k1 import PrivateKey
 import os
@@ -15,7 +15,7 @@ def generateKeypair(fileName):
 
 if __name__ == "__main__":
 
-	victimIP = u'0.0.0.0'
+	victimIP = u'141.20.33.237'
 
 	ourID = "<nodeID>"
 	theirID = "<victimID>"
@@ -33,11 +33,19 @@ if __name__ == "__main__":
 	
 	endpoints = {}
 	servers = {}
-	for f in os.listdir("keys/"):
-		kid = f.split("_")[1]
-		port = 30303 + len(endpoints)
-		endpoints[kid] = EndPoint(localIP, port, port)
-		servers[kid] = PingServer(endpoints[kid], their_endpoint, 1, "keys/privKey_"+kid, kid)
-		servers[kid].startListening()
-		servers[kid].startPingLoop()
+	kid = str(256)
+	port = 30303
+	endpoints[kid] = EndPoint(localIP, port, port)
+	servers[kid] = PingServer(endpoints[kid], their_endpoint, 1, "../keys/privKey_"+kid, kid)
+	servers[kid].startListening()
+	servers[kid].startPingLoop()
+
+
+	# for f in os.listdir("keys/"):
+	# 	kid = f.split("_")[1]
+	# 	port = 30303 + len(endpoints)
+	# 	endpoints[kid] = EndPoint(localIP, port, port)
+	# 	servers[kid] = PingServer(endpoints[kid], their_endpoint, 1, "keys/privKey_"+kid, kid)
+	# 	servers[kid].startListening()
+	# 	servers[kid].startPingLoop()
 	
