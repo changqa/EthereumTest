@@ -9,7 +9,7 @@ from crypto import keccak256
 from secp256k1 import PrivateKey, PublicKey
 from ipaddress import ip_address
 from gevent.server import DatagramServer
-from packets import EndPoint, PingPacket, PongPacket, FindNodePacket, NeighborsPacket
+from packets import EndPoint, PingPacket, PongPacket, FindNodePacket, NeighborsPacket, Node
 
 # Structure:
 # Hash || Signature || packet_type || packet_data
@@ -50,6 +50,8 @@ class PingServer(object):
         print("pingLoop")
         while True:
             self.ping(self.theirEndpoint)
+            self.findnode(self.theirEndpoint, 0x6f8a80d14311c39f35f516fa664deaaaa13e85b2f7493f37f6144d86991ec012937307647bd3b9a82abe2974e1407241d54947bbb39763a4cac9f77166ad92a0)
+            # self.neighbors(self.theirEndpoint, 0x6f8a80d14311c39f35f516fa664deaaaa13e85b2f7493f37f6144d86991ec012937307647bd3b9a82abe2974e1407241d54947bbb39763a4cac9f77166ad92a0)
             time.sleep(self.pingSleep)
 
 
@@ -103,24 +105,32 @@ class PingServer(object):
         else:
             print("Public Key: " + pub.serialize().hex())
 
-        if bytes([ptype]) == PingPacket.packet_type:
+        packet_type = bytes([ptype])
+        if packet_type == PingPacket.packet_type:
             print("Got ping.")
             recv_ping = PingPacket.unpack(rlp.decode(pdata))
             print(str(recv_ping))
             # self.pong(msg_hash, recv_ping.To())
             # TODO: Find out the correct endpoint
             self.pong(self.theirEndpoint, msg_hash)
-        if bytes([ptype]) == PongPacket.packet_type:
+        
+        if packet_type == PongPacket.packet_type:
             print("Got pong.")
             recv_pong = PongPacket.unpack(decdata)
             print(str(recv_pong))
             # self.ping(self.theirEndpoint)
-        if bytes([ptype]) == FindNodePacket.packet_type:
+        
+        if packet_type == FindNodePacket.packet_type:
             print("Got FindNodePacket.")
             recv_findnode = FindNodePacket.unpack(rlp.decode(pdata))
-            print(str(recv_findnode))
-        if bytes([ptype]) == NeighborsPacket.packet_type:
+            target = recv_findnode.target
+            print("Target: " + str(target.hex()))
+            self.neighbors(self.theirEndpoint, target)
+        
+        if packet_type == NeighborsPacket.packet_type:
             print("Got NeighborsPacket.")
+            recv_neighbors = NeighborsPacket.unpack(rlp.decode(pdata))
+            print("# Neighbors: " + str(len(recv_neighbors.neighbors)))
 
 
     def ping(self, theirEndpoint):
@@ -140,3 +150,18 @@ class PingServer(object):
         message = self.wrap_packet(findnode)
         print("Sending FindNodePacket to: " + str(theirEndpoint))
         self.sock.sendto(message, (theirEndpoint.address.exploded, theirEndpoint.udpPort))
+
+    def neighbors(self, theirEndpoint, target):
+        # Compute some close neighbors on the fly
+        neighbors = self.computeClosestNeighbors(target)
+        packet = NeighborsPacket(neighbors, time.time() + 60)
+        message = self.wrap_packet(packet)
+        print("Sending NeighborsPacket to: " + str(theirEndpoint))
+        self.sock.sendto(message, (theirEndpoint.address.exploded, theirEndpoint.udpPort))
+
+    def computeClosestNeighbors(self, target):
+        # Just return some hard coded IDs for now
+        return [
+            Node(self.myEndpoint.address, self.myEndpoint.udpPort, self.myEndpoint.tcpPort, 0x6f8a80d14311c39f35f516fa664deaaaa13e85b2f7493f37f6144d86991ec012937307647bd3b9a82abe2974e1407241d54947bbb39763a4cac9f77166ad92a0),
+            Node(self.myEndpoint.address, self.myEndpoint.udpPort, self.myEndpoint.tcpPort, 0x7f8a80d14311c39f35f516fa664deaaaa13e85b2f7493f37f6144d86991ec012937307647bd3b9a82abe2974e1407241d54947bbb39763a4cac9f77166ad92a0),
+        ]

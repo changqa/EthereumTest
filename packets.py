@@ -2,6 +2,12 @@
 
 from ipaddress import ip_address
 import struct
+import datetime
+
+def timestampToDate(timestamp):
+    return datetime.datetime.fromtimestamp(
+        timestamp
+    ).strftime('%H:%M:%S')
 
 class EndPoint(object):
     def __init__(self, address, udpPort, tcpPort):
@@ -83,7 +89,7 @@ class PingPacket(object):
         return self.endpoint_to
     
     def __str__(self):
-        return "PingPacket. v" + str(self.version) + ", From: " + str(self.endpoint_from) + ", To: " + str(self.endpoint_to) + ", At: " +  str(self.timestamp)
+        return "PingPacket. v" + str(self.version) + ", From: " + str(self.endpoint_from) + ", To: " + str(self.endpoint_to) + ", at " +  timestampToDate(self.timestamp)
 
     @classmethod
     def unpack(cls, packed):
@@ -116,7 +122,7 @@ class PongPacket(object):
         return self.timestamp
 
     def __str__(self):
-        return "Pong. To: " + str(self.endpoint_to) + ", At: " +  str(self.timestamp)
+        return "Pong. To: " + str(self.endpoint_to) + ", at " + timestampToDate(self.timestamp)
 
 
     @classmethod
@@ -137,12 +143,8 @@ class FindNodePacket(object):
         return [self.target,
                 struct.pack(">I", int(self.timestamp))]
 
-    def Timestamp(self):
-        return self.timestamp
-
     def __str__(self):
-        return "FindNode. To: " + str(self.target) + ", At: " +  str(self.timestamp)
-
+        return "FindNode. To: " + str(self.target.hex()) + ", at " + timestampToDate(self.timestamp)
 
     @classmethod
     def unpack(cls, packed):
@@ -158,7 +160,10 @@ class NeighborsPacket(object):
         self.expiration = expiration
 
     def __str__(self):
-        return "Neighbors." + "Expiration: " + str(self.expiration)
+        return "Neighbors. # Neighbors: " + str(len(neighbors)) + ", expiration: " + timestampToDate(self.timestamp)
+
+    def pack(self):
+        return [[n.pack() for n in self.neighbors], struct.pack(">I", int(self.expiration))]
 
     @classmethod
     def unpack(cls, packed):
